@@ -1,0 +1,36 @@
+# виртуальное окружение и кэш
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# рабочее: временные файлы, готовые клипы, база, журнал
+work/
+output/
+state.sqlite
+bot.log
+
+# секреты и личные настройки
+credentials.json
+token*.json
+settings.json
+
+# тяжёлые медиа: у каждого свои
+backgrounds/*
+!backgrounds/.gitkeep
+music/*
+!music/.gitkeep
+banners/*
+!banners/.gitkeep
+пример.mp4
+*.zip
+*.mp4
+*.mkv
+*.mov
+*.wav
+*.mp3
+
+# служебное
+.vscode/
+cpp/bin/
+Новый текстовый документ*.txt
