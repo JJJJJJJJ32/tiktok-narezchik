@@ -228,7 +228,15 @@ def _banner_ready(path: Path, seconds: float) -> Path:
     background = (banner_background(path)
                   if getattr(cfg, "BANNER_GREEN", True) else None)
 
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(path.resolve())]
+    cmd = ["ffmpeg", "-y", "-v", "error"]
+    # Ролик короче нужной вставки — зацикливаем, иначе реклама оборвётся
+    # и сегменты клипа разъедутся по времени.
+    try:
+        if probe_duration(path) < seconds - 0.05:
+            cmd += ["-stream_loop", "-1"]
+    except Exception:
+        pass
+    cmd += ["-i", str(path.resolve())]
     if not has_audio:
         cmd += ["-f", "lavfi", "-t", f"{seconds:.3f}",
                 "-i", "anullsrc=r=44100:cl=stereo"]

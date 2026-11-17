@@ -35,8 +35,24 @@ def mean_red(png: Path, y: int) -> int:
     return out.stdout[0] if len(out.stdout) >= 3 else -1
 
 
+def check_short_banner() -> None:
+    """Ролик короче вставки зацикливается, а не обрывает клип."""
+    banner = WORK / "short.mp4"
+    if not banner.exists():
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error",
+             "-f", "lavfi", "-i", "color=c=green:s=320x240:rate=30:duration=1",
+             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+             str(banner)], check=True)
+    ready = composer._banner_ready(banner, 4.0)
+    seconds = composer.probe_duration(ready)
+    assert abs(seconds - 4.0) <= 0.3, seconds
+    print(f"короткий ролик зациклен до {seconds:.1f} с")
+
+
 def main() -> None:
     WORK.mkdir(parents=True, exist_ok=True)
+    check_short_banner()
     clip = WORK / "clip.mp4"
     if not clip.exists():
         subprocess.run(
