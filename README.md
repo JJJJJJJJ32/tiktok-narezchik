@@ -242,6 +242,7 @@ python tests/selftest.py --render    # + Whisper (скачает модель) �
 python tests/smoke.py                # письмо, отчёт, фон blur/black (без сети)
 python tests/retry.py                # автоповторы Google Диска (без сети)
 python tests/layout.py               # вставки рекламы, позиция субтитров, режимы кадра
+python tests/worker.py               # настройки из меню доходят до процесса рендера
 python tests/render.py               # пробный рендер: клип + музыка + реклама + озвучка
 ```
 
@@ -268,7 +269,7 @@ composer.py        кадр, музыка, реклама, сборка FFmpeg
 uploader.py        Google Drive + report.csv + письмо
 build_cpp.py       сборка C++-модуля
 cpp/               silence_finder.cpp + CMakeLists.txt
-tests/             selftest.py, smoke.py, retry.py, layout.py, render.py, bench.py
+tests/             selftest.py, smoke.py, retry.py, layout.py, worker.py, render.py, bench.py
 backgrounds/       фоновые видео (режим folder)
 music/             музыкальные треки
 banners/           рекламные ролики

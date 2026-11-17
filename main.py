@@ -216,6 +216,21 @@ def _part_usable(part: dict, ass_path: Path | None = None) -> bool:
     return all(Path(frag.get("path", "")).exists() for frag in backgrounds)
 
 
+def _render_settings() -> dict:
+    """Настройки, которые нужны монтажу внутри дочернего процесса.
+
+    На Windows пул процессов запускает новые интерпретаторы: изменения cfg,
+    сделанные из меню, туда не попадают. Поэтому передаём их вместе с заданием.
+    """
+    names = (
+        "BACKGROUND_MODE", "BACKGROUND_VOLUME", "TOP_RATIO",
+        "MUSIC_VOLUME", "KEEP_ORIGINAL_AUDIO",
+        "BANNER_ENABLED", "BANNER_DIR", "BANNER_EVERY", "BANNER_MIDDLE_UNTIL",
+        "BANNER_DURATION", "BANNER_GREEN",
+    )
+    return {name: getattr(cfg, name) for name in names}
+
+
 def _part_data(video: dict, index: int, total: int, part: dict) -> dict:
     start, end = float(part["start"]), float(part["end"])
     backgrounds = part.get("backgrounds") or []
@@ -231,6 +246,7 @@ def _part_data(video: dict, index: int, total: int, part: dict) -> dict:
         "out_path": str(out_path),
         "voice_path": voice if voice and Path(voice).exists() else None,
         "music_path": music if music and Path(music).exists() else None,
+        "settings": _render_settings(),
     }
     return {
         "index": index,
@@ -331,6 +347,7 @@ def _prepare_part(video: dict, index: int, total: int, start: float, end: float,
         "out_path": str(out_path),
         "voice_path": str(voice_path) if voice_path else None,
         "music_path": str(music) if music else None,
+        "settings": _render_settings(),
     }
     return {
         "index": index,
@@ -915,7 +932,7 @@ def run_all(channels: list[str] | None = None, dry_run: bool = False) -> int:
 
     ui.blank()
     ui.info(f"Отчёт: {Path(cfg.OUTPUT_DIR) / uploader.REPORT_NAME}")
-    ui.info(f"Журнал: bot.log")
+    ui.info("Журнал: bot.log")
     ui.blank()
 
     return 0 if not errors else 1

@@ -948,7 +948,7 @@ def _report() -> None:
 
     with report.open(encoding="utf-8-sig", newline="") as f:
         rows = list(csv.reader(f, delimiter=";"))
-    header, body = rows[0], rows[1:]
+    body = rows[1:]
     width = len(uploader.REPORT_HEADER)
     body = [row + [""] * (width - len(row)) for row in body]
     ui.kv("Записей", len(body))

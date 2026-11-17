@@ -3,6 +3,7 @@
 
 import hashlib
 import logging
+import os
 import random
 import shutil
 import subprocess
@@ -216,8 +217,12 @@ def _banner_ready(path: Path, seconds: float) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     out = folder / f"banner_{key}.mp4"
     if out.exists() and out.stat().st_size > 0:
-        _ready_cache[key] = out
-        return out
+        try:
+            if probe_duration(out) > 0.1:
+                _ready_cache[key] = out
+                return out
+        except Exception:
+            pass  # битый файл от прошлого сбоя — перерендерим
 
     has_audio = probe_audio(path)
     background = (banner_background(path)
@@ -247,16 +252,23 @@ def _banner_ready(path: Path, seconds: float) -> Path:
              f"aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
              f"apad,atrim=0:{seconds:.3f}[a]")
 
-    result = subprocess.run(
-        [*cmd, "-filter_complex", f"{video};{audio}",
-         "-map", "[v]", "-map", "[a]",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
-         "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
-         "-t", f"{seconds:.3f}", "-movflags", "+faststart", str(out.resolve())],
-        capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if result.returncode != 0 or not out.exists():
-        detail = (result.stderr or "").strip()[-500:] or "ffmpeg ничего не написал"
-        raise RuntimeError(f"реклама {path.name}: {detail}")
+    # Пишем во временный файл своего процесса и переименовываем: при
+    # параллельном монтаже два процесса не должны портить общий кэш.
+    tmp = out.with_name(f"{out.stem}.{os.getpid()}.tmp.mp4")
+    try:
+        result = subprocess.run(
+            [*cmd, "-filter_complex", f"{video};{audio}",
+             "-map", "[v]", "-map", "[a]",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
+             "-t", f"{seconds:.3f}", "-movflags", "+faststart", str(tmp.resolve())],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if result.returncode != 0 or not tmp.exists() or tmp.stat().st_size == 0:
+            detail = (result.stderr or "").strip()[-500:] or "ffmpeg ничего не написал"
+            raise RuntimeError(f"реклама {path.name}: {detail}")
+        os.replace(tmp, out)
+    finally:
+        tmp.unlink(missing_ok=True)
 
     _ready_cache[key] = out
     return out
@@ -310,6 +322,10 @@ def render_clip(job: dict) -> str:
     """
     clip = Path(job["clip_path"])
     start, end = job["start"], job["end"]
+    # В дочернем процессе настройки из меню не наследуются: Windows запускает
+    # новый интерпретатор с заводским config.py. Применяем их из задания.
+    for name, value in (job.get("settings") or {}).items():
+        setattr(cfg, name, value)
     ass_path = Path(job["ass_path"]).resolve()
     out_path = Path(job["out_path"]).resolve()
     total = round(end - start, 3)
