@@ -111,21 +111,31 @@ def list_banners() -> list[Path]:
     return sorted(p for p in folder.iterdir() if p.suffix.lower() in VIDEO_EXT)
 
 
-def banner_positions(total: float, every: int | None = None,
-                     middle_until: int | None = None) -> list[float]:
-    """Где вставить рекламу: посередине (короткий клип) или каждые N секунд."""
-    every = int(every if every is not None else cfg.BANNER_EVERY)
-    middle_until = int(middle_until if middle_until is not None
-                       else cfg.BANNER_MIDDLE_UNTIL)
-    every = max(10, every)
+def banner_positions(total: float, minute: float | None = None,
+                     min_tail: float | None = None) -> list[float]:
+    """Середина каждой минуты; последняя неполная — посередине неё.
+
+    60 с → [30]; 90 с → [30, 75]; 45 с → [22.5]. Совсем короткий хвост
+    (меньше min_tail) отдельного баннера не получает.
+    """
+    minute = float(minute if minute is not None else cfg.BANNER_MINUTE)
+    min_tail = float(min_tail if min_tail is not None else cfg.BANNER_MIN_TAIL)
+    minute = max(20.0, minute)
     if total < 20:
         return []
-    if total <= middle_until:
-        return [round(total / 2, 3)]
-    points, moment = [], float(every)
-    while moment < total - 5:
-        points.append(round(moment, 3))
-        moment += every
+
+    points: list[float] = []
+    start = 0.0
+    while start < total - 0.001:
+        end = min(start + minute, total)
+        length = end - start
+        if points and length < min_tail:
+            break
+        point = start + length / 2
+        # После баннера должно остаться хотя бы 5 секунд клипа.
+        if point < total - 5:
+            points.append(round(point, 3))
+        start = end
     return points
 
 

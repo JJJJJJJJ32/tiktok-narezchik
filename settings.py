@@ -74,7 +74,6 @@ def defaults() -> dict:
         "keep_original_audio": cfg.KEEP_ORIGINAL_AUDIO,
         "banner_enabled": cfg.BANNER_ENABLED,
         "banner_dir": cfg.BANNER_DIR,
-        "banner_every": cfg.BANNER_EVERY,
         "banner_duration": cfg.BANNER_DURATION,
         "banner_green": cfg.BANNER_GREEN,
     }
@@ -131,7 +130,6 @@ def apply(data: dict, bot: dict | None = None) -> None:
                                             cfg.KEEP_ORIGINAL_AUDIO))
     cfg.BANNER_ENABLED = bool(data.get("banner_enabled", cfg.BANNER_ENABLED))
     cfg.BANNER_DIR = str(data.get("banner_dir", cfg.BANNER_DIR))
-    cfg.BANNER_EVERY = max(10, int(data.get("banner_every", cfg.BANNER_EVERY)))
     cfg.BANNER_DURATION = max(0, int(data.get("banner_duration",
                                               cfg.BANNER_DURATION)))
     cfg.BANNER_GREEN = bool(data.get("banner_green", cfg.BANNER_GREEN))

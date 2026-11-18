@@ -100,8 +100,6 @@ def main() -> None:
     cfg.BANNER_ENABLED = True
     cfg.BANNER_DIR = str(media["banner"].parent)
     cfg.BANNER_DURATION = int(BANNER_SECONDS)
-    cfg.BANNER_EVERY = 45
-    cfg.BANNER_MIDDLE_UNTIL = 120
     cfg.BANNER_GREEN = True
     cfg.MUSIC_ENABLED = True
     cfg.MUSIC_DIR = str(media["music"].parent)

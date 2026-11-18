@@ -18,27 +18,28 @@ HEIGHT = cfg.HEIGHT
 
 # ---------------------------------------------------------------- реклама
 
-def check_banner_short_clip():
-    # Короткий клип (меньше двух минут) — одна вставка ровно посередине.
-    assert composer.banner_positions(30, every=45, middle_until=120) == [15.0]
-    assert composer.banner_positions(60, every=45, middle_until=120) == [30.0]
-    assert composer.banner_positions(120, every=45, middle_until=120) == [60.0]
+def check_banner_midpoints():
+    # Баннер — в середине каждой минуты.
+    assert composer.banner_positions(30) == [15.0]
+    assert composer.banner_positions(45) == [22.5]      # неполная минута — посередине
+    assert composer.banner_positions(60) == [30.0]
+    assert composer.banner_positions(90) == [30.0, 75.0]
+    assert composer.banner_positions(120) == [30.0, 90.0]
+    assert composer.banner_positions(135) == [30.0, 90.0, 127.5]
+    assert composer.banner_positions(150) == [30.0, 90.0, 135.0]
 
 
-def check_banner_long_clip():
-    # Длинный клип — вставка каждые N секунд, но не в последние 5 секунд.
-    assert composer.banner_positions(180, every=45, middle_until=120) == [45.0, 90.0, 135.0]
-    assert composer.banner_positions(100, every=45, middle_until=60) == [45.0, 90.0]
-    assert composer.banner_positions(94, every=45, middle_until=60) == [45.0]
+def check_banner_tail():
+    # Хвост короче 15 секунд отдельного баннера не получает.
+    assert composer.banner_positions(70) == [30.0]
+    assert composer.banner_positions(75) == [30.0, 67.5]
     # Совсем короткий клип рекламу не получает.
-    assert composer.banner_positions(10, every=45, middle_until=120) == []
-    # Минимальный шаг — 10 секунд, даже если в настройках меньше.
-    assert composer.banner_positions(60, every=1, middle_until=120) == [30.0]
+    assert composer.banner_positions(10) == []
 
 
 def check_banner_never_past_end():
     for total in (20, 45, 91, 121, 300, 601):
-        for moment in composer.banner_positions(total, every=45, middle_until=120):
+        for moment in composer.banner_positions(total):
             assert 0 < moment < total - 0.001, (total, moment)
 
 
@@ -111,8 +112,8 @@ def check_pick_backgrounds_skipped():
 
 
 def main():
-    check_banner_short_clip()
-    check_banner_long_clip()
+    check_banner_midpoints()
+    check_banner_tail()
     check_banner_never_past_end()
     check_caption_width_mode()
     check_caption_other_modes()

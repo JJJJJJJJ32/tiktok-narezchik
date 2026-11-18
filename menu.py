@@ -740,15 +740,15 @@ def _banners() -> None:
         ui.banner("Рекламные вставки")
         ui.info(f"сейчас: {'включены' if data['banner_enabled'] else 'выключены'} · "
                 f"папка {data['banner_dir']} · роликов: {count}")
-        ui.note("Клип до 2 минут — одна вставка посередине. Длиннее — "
-                f"каждые {data['banner_every']} секунд.")
+        ui.note("Баннер — в середине каждой минуты: 1:00 → 0:30, "
+                "2:00 → 0:30 и 1:30. Последняя неполная минута — тоже "
+                "посередине: 0:45 → 0:22.")
         ui.blank()
         ui.choice(1, "ВКЛЮЧИТЬ / ВЫКЛЮЧИТЬ",
                   "выключить" if data["banner_enabled"] else "включить")
         ui.choice(2, "ПАПКА С РЕКЛАМОЙ", data["banner_dir"])
-        ui.choice(3, "КАЖДЫЕ N СЕКУНД", f"{data['banner_every']} с")
-        ui.choice(4, "ДЛИТЕЛЬНОСТЬ ВСТАВКИ", f"{data['banner_duration']} с")
-        ui.choice(5, "УБИРАТЬ ОДНОТОННЫЙ ФОН",
+        ui.choice(3, "ДЛИТЕЛЬНОСТЬ ВСТАВКИ", f"{data['banner_duration']} с")
+        ui.choice(4, "УБИРАТЬ ОДНОТОННЫЙ ФОН",
                   "да" if data["banner_green"] else "нет")
         ui.choice(0, "НАЗАД")
 
@@ -768,15 +768,6 @@ def _banners() -> None:
                 ui.ok(f"Папка: {folder} ({len(composer.list_banners())} роликов)")
             time.sleep(0.8)
         elif answer == "3":
-            value = _ask("Вставлять каждые N секунд", str(data["banner_every"]))
-            if value.isdigit() and 10 <= int(value) <= 600:
-                data["banner_every"] = int(value)
-                _save(data)
-                ui.ok(f"Каждые {value} с")
-            else:
-                ui.warn("Нужно число от 10 до 600")
-            time.sleep(0.8)
-        elif answer == "4":
             value = _ask("Сколько секунд показывать рекламу",
                          str(data["banner_duration"]))
             if value.isdigit() and 1 <= int(value) <= 60:
@@ -786,7 +777,7 @@ def _banners() -> None:
             else:
                 ui.warn("Нужно число от 1 до 60")
             time.sleep(0.8)
-        elif answer == "5":
+        elif answer == "4":
             data["banner_green"] = not data["banner_green"]
             _save(data)
             ui.ok("Фон рекламы: "

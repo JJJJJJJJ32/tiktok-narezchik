@@ -225,7 +225,7 @@ def _render_settings() -> dict:
     names = (
         "BACKGROUND_MODE", "BACKGROUND_VOLUME", "TOP_RATIO",
         "MUSIC_VOLUME", "KEEP_ORIGINAL_AUDIO",
-        "BANNER_ENABLED", "BANNER_DIR", "BANNER_EVERY", "BANNER_MIDDLE_UNTIL",
+        "BANNER_ENABLED", "BANNER_DIR", "BANNER_MINUTE", "BANNER_MIN_TAIL",
         "BANNER_DURATION", "BANNER_GREEN",
     )
     return {name: getattr(cfg, name) for name in names}
