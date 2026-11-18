@@ -16,9 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import composer
-import config as cfg
-import subtitles
+from bot import composer
+from bot import config as cfg
+from bot import subtitles
 
 WORK = ROOT / "work" / "test_worker"
 

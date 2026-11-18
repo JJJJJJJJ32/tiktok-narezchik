@@ -18,11 +18,11 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import composer  # noqa: E402
-import config as cfg  # noqa: E402
-import cutter  # noqa: E402
-import subtitles  # noqa: E402
-import uploader  # noqa: E402
+from bot import composer  # noqa: E402
+from bot import config as cfg  # noqa: E402
+from bot import cutter  # noqa: E402
+from bot import subtitles  # noqa: E402
+from bot import uploader  # noqa: E402
 
 FIX = ROOT / "tests" / "fixtures"
 checks = []

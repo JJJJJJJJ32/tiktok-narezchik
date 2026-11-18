@@ -13,8 +13,8 @@ from pathlib import Path
 
 import yt_dlp
 
-import config as cfg
-import ui
+from . import config as cfg
+from . import ui
 
 log = logging.getLogger(__name__)
 

@@ -13,9 +13,9 @@ from pathlib import Path
 
 import numpy as np
 
-import config as cfg
+from . import config as cfg
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 CPP_BIN = ROOT / "cpp" / "bin" / ("silence_finder.exe" if sys.platform == "win32" else "silence_finder")
 
 log = logging.getLogger(__name__)

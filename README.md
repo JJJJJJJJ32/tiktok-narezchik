@@ -84,7 +84,7 @@ winget install BrechtSanders.WinLibs.POSIX.UCRT
 
 Затем:
 ```powershell
-python build_cpp.py
+python tools/build_cpp.py
 ```
 Появится `cpp/bin/silence_finder.exe`. Если собрать не удалось — бот продолжит
 работать на Python-фолбэке. Отключить C++ принудительно: `USE_CPP = False`.
@@ -255,21 +255,21 @@ python tests/render.py               # пробный рендер: клип + �
 ## Структура
 
 ```
-config.py          заводские настройки
-settings.json      настройки из меню (создаётся при первом изменении)
-main.py            точка входа + обработка
-menu.py            стартовое меню
-ui.py              красивый вывод (цвета, галочки, итог)
-settings.py        чтение/запись настроек, профили ботов
-progress.py        сохранение хода работы
-downloader.py      yt-dlp + state.sqlite, YouTube и TikTok
-cutter.py          точки реза (C++ / Python-фолбэк)
-subtitles.py       faster-whisper → .ass
-voiceover.py       перевод (gtx) и озвучка (edge-tts)
-composer.py        кадр, музыка, реклама, сборка FFmpeg
-uploader.py        Google Drive + report.csv + письмо
-build_cpp.py       сборка C++-модуля
-cpp/               silence_finder.cpp + CMakeLists.txt
+main.py            точка входа + обработка (запускать только его)
+bot/               весь код бота
+    config.py      заводские настройки
+    settings.py    чтение/запись настроек, профили ботов
+    ui.py          красивый вывод (цвета, галочки, итог)
+    menu.py        стартовое меню
+    progress.py    сохранение хода работы
+    downloader.py  yt-dlp + state.sqlite, YouTube и TikTok
+    cutter.py      точки реза (C++ / Python-фолбэк)
+    subtitles.py   faster-whisper → .ass
+    voiceover.py   перевод (gtx) и озвучка (edge-tts)
+    composer.py    кадр, музыка, реклама, сборка FFmpeg
+    uploader.py    Google Drive + report.csv + письмо
+tools/             build_cpp.py — сборка C++-модуля
+cpp/               silence_finder.cpp + CMakeLists.txt + bin/
 tests/             selftest.py, smoke.py, retry.py, layout.py, worker.py, render.py, bench.py
 backgrounds/       фоновые видео (режим folder)
 music/             музыкальные треки
@@ -277,6 +277,12 @@ banners/           рекламные ролики
 fonts/             Montserrat-Black.ttf
 work/              временные файлы, work/progress/, work/banners_ready/
 output/            готовые клипы и превью
+
+settings.json      настройки из меню (создаётся при первом изменении)
+credentials.json   ключ Google (не в git)
+token*.json        доступ к Диску ботов (не в git)
+state.sqlite       база обработанных видео
+bot.log            лог последнего запуска
 ```
 
 ## Допущения и ограничения

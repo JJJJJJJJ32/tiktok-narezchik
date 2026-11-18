@@ -12,12 +12,12 @@ import sys
 import time
 from pathlib import Path
 
-import composer
-import config as cfg
-import downloader
-import settings
-import ui
-import uploader
+from . import composer
+from . import config as cfg
+from . import downloader
+from . import settings
+from . import ui
+from . import uploader
 
 
 # ---------------------------------------------------------------- утилиты
@@ -716,7 +716,7 @@ def _voice() -> None:
             ui.banner("Проверка голоса")
             ui.info(f"Голос: {data['voice_name']}, синтезирую пробную фразу…")
             try:
-                import voiceover
+                from . import voiceover
                 path = Path(cfg.WORK_DIR) / "voice_check.mp3"
                 path.parent.mkdir(parents=True, exist_ok=True)
                 if voiceover._synthesize("Привет! Так будет звучать озвучка видео.",

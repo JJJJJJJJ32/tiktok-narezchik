@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Сборка C++-модуля silence_finder (MinGW g++ или MSVC cl).
 
-Запуск: python build_cpp.py
+Запуск: python tools/build_cpp.py
 Результат: cpp/bin/silence_finder[.exe]
 """
 
@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "cpp" / "silence_finder.cpp"
 BIN_DIR = ROOT / "cpp" / "bin"
 EXE = BIN_DIR / ("silence_finder.exe" if os.name == "nt" else "silence_finder")

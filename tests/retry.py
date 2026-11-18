@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import uploader
+from bot import uploader
 
 logging.basicConfig(level=logging.CRITICAL)
 uploader.time.sleep = lambda seconds: None

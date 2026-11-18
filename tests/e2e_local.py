@@ -12,11 +12,11 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root))
 
-    import config as cfg
-    import downloader
+    from bot import config as cfg
+    from bot import downloader
     import main as runner
-    import ui
-    import uploader
+    from bot import ui
+    from bot import uploader
 
     source = root / "work" / "raw" / "pKm3HiOv3gg.mp4"
     if not source.exists():

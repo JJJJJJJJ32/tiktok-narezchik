@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-import config as cfg
+from . import config as cfg
 
 log = logging.getLogger(__name__)
 

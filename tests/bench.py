@@ -14,8 +14,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import config as cfg  # noqa: E402
-import cutter  # noqa: E402
+from bot import config as cfg  # noqa: E402
+from bot import cutter  # noqa: E402
 
 
 def make_pcm(seconds: int) -> bytes:

@@ -10,8 +10,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import composer
-import config as cfg
+from bot import composer
+from bot import config as cfg
 
 HEIGHT = cfg.HEIGHT
 

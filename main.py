@@ -13,16 +13,16 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
-import composer
-import config as cfg
-import cutter
-import downloader
-import progress
-import settings
-import subtitles
-import ui
-import uploader
-import voiceover
+from bot import composer
+from bot import config as cfg
+from bot import cutter
+from bot import downloader
+from bot import progress
+from bot import settings
+from bot import subtitles
+from bot import ui
+from bot import uploader
+from bot import voiceover
 
 log = logging.getLogger("bot")
 
@@ -957,7 +957,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.no_menu or args.channel or args.dry_run:
         return run_all(channels=args.channel, dry_run=args.dry_run)
 
-    import menu
+    from bot import menu
 
     try:
         menu.loop()

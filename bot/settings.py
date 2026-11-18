@@ -14,7 +14,7 @@ import logging
 import re
 from pathlib import Path
 
-import config as cfg
+from . import config as cfg
 
 log = logging.getLogger(__name__)
 

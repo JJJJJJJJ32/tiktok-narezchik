@@ -15,8 +15,8 @@ from datetime import datetime
 from email.message import EmailMessage
 from pathlib import Path
 
-import config as cfg
-import ui
+from . import config as cfg
+from . import ui
 
 log = logging.getLogger(__name__)
 

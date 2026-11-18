@@ -10,12 +10,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-import composer  # noqa: E402
-import config as cfg  # noqa: E402
-import settings  # noqa: E402
-import subtitles  # noqa: E402
-import ui  # noqa: E402
-import uploader  # noqa: E402
+from bot import composer  # noqa: E402
+from bot import config as cfg  # noqa: E402
+from bot import settings  # noqa: E402
+from bot import subtitles  # noqa: E402
+from bot import ui  # noqa: E402
+from bot import uploader  # noqa: E402
 
 assert settings.load()["bots"], "settings.json без ботов"
 settings.save(settings.load())  # запись/чтение без потерь
