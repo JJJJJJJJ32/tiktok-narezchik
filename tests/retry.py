@@ -95,11 +95,13 @@ class FakeFilesDrive:
         self.blobs = []
         self.created = 0
         self.drops = 1
+        self.list_fields = []
 
     def files(self):
         return self
 
     def list(self, q="", fields="", pageSize=1, **kwargs):
+        self.list_fields.append(fields)
         if "mimeType" in q:
             found = list(self.folders)
         else:
@@ -151,6 +153,20 @@ def check_file_not_duplicated():
     assert drive.created == 1, drive.created     # файл загружен один раз
     assert len(drive.blobs) == 1, drive.blobs
     assert result["link"] == "https://drive.google.com/file/d/x/view", result
+    # Диск v3 для списка требует поля внутри files(...): fields=id,webViewLink
+    # даёт HttpError 400 «Invalid field selection id».
+    for fields in drive.list_fields:
+        assert fields.startswith("files("), fields
+
+
+def check_ytdlp_sleep_kwarg():
+    """yt-dlp зовёт паузу как sleep_func(n=...), а не позиционно."""
+    from bot import downloader
+
+    assert downloader._retry_sleep(n=0) == 1.0
+    assert downloader._retry_sleep(n=2) == 4.0
+    assert downloader._retry_sleep(3) == 8.0
+    assert downloader._retry_sleep(n=99) == 30.0
 
 
 class Req:
@@ -237,6 +253,7 @@ def main():
     check_report_not_duplicated()
     check_folder_not_duplicated()
     check_file_not_duplicated()
+    check_ytdlp_sleep_kwarg()
     print("ВСЁ ОК")
 
 

@@ -231,6 +231,49 @@ def _render_settings() -> dict:
     return {name: getattr(cfg, name) for name in names}
 
 
+def _free_ram_gb() -> float | None:
+    """Сколько свободной оперативной памяти, ГБ. None — узнать не вышло."""
+    try:
+        import ctypes
+
+        class _Status(ctypes.Structure):
+            _fields_ = [
+                ("length", ctypes.c_ulong),
+                ("load", ctypes.c_ulong),
+                ("total_phys", ctypes.c_ulonglong),
+                ("avail_phys", ctypes.c_ulonglong),
+                ("total_page", ctypes.c_ulonglong),
+                ("avail_page", ctypes.c_ulonglong),
+                ("total_virtual", ctypes.c_ulonglong),
+                ("avail_virtual", ctypes.c_ulonglong),
+                ("avail_extended", ctypes.c_ulonglong),
+            ]
+
+        status = _Status()
+        status.length = ctypes.sizeof(_Status)
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return None
+        return status.avail_phys / (1024 ** 3)
+    except Exception:
+        return None
+
+
+def _render_workers() -> int:
+    """Сколько частей монтировать одновременно — с оглядкой на память.
+
+    Каждому ffmpeg на кадре 1080x1920 нужно около 2 ГБ. Если памяти меньше,
+    система убивает воркер и пул процессов рассыпается (BrokenProcessPool
+    в логе), после чего монтаж всё равно идёт по очереди — лучше сразу так.
+    """
+    workers = max(1, int(getattr(cfg, "PARALLEL_JOBS", 1)))
+    free = _free_ram_gb()
+    if free is None:
+        return workers
+    per_job, reserve = 2.0, 1.0
+    fits = max(1, int((free - reserve) // per_job))
+    return max(1, min(workers, fits))
+
+
 def _part_data(video: dict, index: int, total: int, part: dict) -> dict:
     start, end = float(part["start"]), float(part["end"])
     backgrounds = part.get("backgrounds") or []
@@ -524,8 +567,11 @@ def process_video(video: dict, con, drive: uploader.DriveUploader,
     pending = [data for data in prepared if not data.get("done")]
     if pending:
         ui.info(f"монтирую {len(pending)} из {total}…")
+        workers = _render_workers()
+        if workers < max(1, int(cfg.PARALLEL_JOBS)):
+            ui.note(f"свободной памяти мало — монтирую в {workers} поток(а)")
         try:
-            with ProcessPoolExecutor(max_workers=max(1, cfg.PARALLEL_JOBS)) as pool:
+            with ProcessPoolExecutor(max_workers=workers) as pool:
                 futures = {}
                 for data in pending:
                     data["render_tries"] = 1
@@ -537,6 +583,10 @@ def process_video(video: dict, con, drive: uploader.DriveUploader,
                         data = futures.pop(future)
                         try:
                             future.result()
+                        except BrokenProcessPool:
+                            # Пул умер целиком: повторять в него бессмысленно,
+                            # уходим в последовательный монтаж ниже.
+                            raise
                         except Exception as e:
                             if data["render_tries"] < tries:
                                 ui.block(ui.WARN, f"часть {data['index']:02d}: попытка "

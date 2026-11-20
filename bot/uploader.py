@@ -237,7 +237,7 @@ class DriveUploader:
                 # Прошлая попытка могла загрузить файл, а ответ потерялся —
                 # тогда не грузим второй раз, а берём найденный.
                 found = self.service.files().list(
-                    q=query, fields="id, webViewLink", pageSize=1,
+                    q=query, fields="files(id, webViewLink)", pageSize=1,
                 ).execute().get("files", [])
                 if found:
                     return found[0]

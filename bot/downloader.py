@@ -36,8 +36,13 @@ _DOH_ENDPOINTS = (
 )
 
 
-def _retry_sleep(attempt: int) -> float:
-    """Пауза перед повтором запроса к YouTube: 2, 4, 8, 16, 24, 30… секунд."""
+def _retry_sleep(n: int = 1, **_ignored) -> float:
+    """Пауза перед повтором запроса к YouTube: 2, 4, 8, 16, 24, 30… секунд.
+
+    yt-dlp зовёт её как ``sleep_func(n=попытка)``, поэтому параметр называем n
+    и на всякий случай принимаем лишние именованные аргументы.
+    """
+    attempt = max(0, int(n))
     return float(min(30, 2 ** min(attempt, 5)))
 
 
