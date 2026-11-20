@@ -160,72 +160,51 @@ def pick_banners(total: float, rng: random.Random | None = None) -> list[dict]:
                 duration = probe_duration(choice)
             except Exception:
                 duration = 4.0
-        duration = min(float(duration), 15.0, max(0.5, total - moment))
+        duration = min(float(duration), float(getattr(cfg, "BANNER_MAX", 15.0)),
+                       max(0.5, total - moment))
         result.append({"path": str(choice), "at": moment,
                        "duration": round(duration, 3)})
     return result
 
 
-# Цвет фона рекламного ролика ищем один раз на файл.
-_bg_cache: dict[str, str | None] = {}
+# Готовые сцены рекламы: размытый стоп-кадр клипа + сам баннер сверху.
 _ready_cache: dict[str, Path] = {}
 
 
-def _corner_color(path: Path, x: str, y: str) -> tuple[int, int, int] | None:
-    out = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(path), "-frames:v", "1",
-         "-vf", f"crop=16:16:{x}:{y},scale=1:1", "-f", "rawvideo",
-         "-pix_fmt", "rgb24", "-"],
-        capture_output=True,
-    )
-    data = out.stdout
-    if len(data) < 3:
-        return None
-    return data[0], data[1], data[2]
+def _freeze_frame(clip: Path, moment: float, out: Path) -> None:
+    """Стоп-кадр клипа в момент вставки — из него делаем размытый фон."""
+    moment = max(0.0, float(moment))
+    error = ""
+    for seek in (["-ss", f"{moment:.3f}"], ["-sseof", "-0.2"]):
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", *seek, "-i", str(clip),
+             "-frames:v", "1", "-q:v", "2", str(out)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if result.returncode == 0 and out.exists() and out.stat().st_size > 0:
+            return
+        error = (result.stderr or "").strip()[-300:]
+    raise RuntimeError(f"кадр из {clip.name}: {error}")
 
 
-def banner_background(path: Path) -> str | None:
-    """Цвет однотонного фона ролика (обычно зелёный) или None, если фона нет."""
-    key = f"{path}|{path.stat().st_mtime if path.exists() else 0}"
-    if key in _bg_cache:
-        return _bg_cache[key]
+def banner_scene(banner: Path, seconds: float, clip: Path, moment: float) -> Path:
+    """Сцена рекламы 1080x1920: размытый стоп-кадр клипа + баннер по центру.
 
-    corners = [
-        _corner_color(path, "0", "0"),
-        _corner_color(path, "iw-16", "0"),
-        _corner_color(path, "0", "ih-16"),
-        _corner_color(path, "iw-16", "ih-16"),
-    ]
-    color = None
-    known = [c for c in corners if c is not None]
-    if len(known) == 4:
-        first = known[0]
-        if all(abs(a - b) <= 14 for corner in known[1:]
-               for a, b in zip(first, corner)):
-            color = "#{:02x}{:02x}{:02x}".format(*first)
-    _bg_cache[key] = color
-    return color
-
-
-def _banner_ready(path: Path, seconds: float) -> Path:
-    """Рекламный ролик 1080×1920 с уже вырезанным фоном — отдельным проходом.
-
-    Вырезание фона (colorkey + overlay) на весь клип в одном фильтре съедает
-    слишком много памяти: ffmpeg падает на длинных клипах. Поэтому готовим
-    короткий ролик заранее и кэшируем его в work/banners_ready.
+    Фон у баннера не вырезаем: кладём ролик поверх как есть, сохраняя его
+    прозрачность (HEVC alpha и т.п.). Иначе однотонный фон съедал картинку.
     """
     seconds = round(float(seconds), 3)
+    moment = round(float(moment), 3)
     key = hashlib.md5(
-        f"{path.resolve()}|{path.stat().st_mtime if path.exists() else 0}|"
-        f"{seconds}|{getattr(cfg, 'BANNER_GREEN', True)}|"
-        f"{cfg.WIDTH}x{cfg.HEIGHT}|{cfg.FPS}".encode("utf-8")
+        f"scene|{banner.resolve()}|{banner.stat().st_mtime if banner.exists() else 0}|"
+        f"{seconds}|{clip.resolve()}|{clip.stat().st_mtime if clip.exists() else 0}|"
+        f"{moment}|{cfg.WIDTH}x{cfg.HEIGHT}|{cfg.FPS}".encode("utf-8")
     ).hexdigest()[:16]
     if key in _ready_cache and _ready_cache[key].exists():
         return _ready_cache[key]
 
     folder = Path(cfg.WORK_DIR) / "banners_ready"
     folder.mkdir(parents=True, exist_ok=True)
-    out = folder / f"banner_{key}.mp4"
+    out = folder / f"scene_{key}.mp4"
     if out.exists() and out.stat().st_size > 0:
         try:
             if probe_duration(out) > 0.1:
@@ -234,38 +213,39 @@ def _banner_ready(path: Path, seconds: float) -> Path:
         except Exception:
             pass  # битый файл от прошлого сбоя — перерендерим
 
-    has_audio = probe_audio(path)
-    background = (banner_background(path)
-                  if getattr(cfg, "BANNER_GREEN", True) else None)
+    frame = folder / f"frame_{key}.jpg"
+    _freeze_frame(clip, moment, frame)
 
-    cmd = ["ffmpeg", "-y", "-v", "error"]
     # Ролик короче нужной вставки — зацикливаем, иначе реклама оборвётся
     # и сегменты клипа разъедутся по времени.
+    loop: list[str] = []
     try:
-        if probe_duration(path) < seconds - 0.05:
-            cmd += ["-stream_loop", "-1"]
+        if probe_duration(banner) < seconds - 0.05:
+            loop = ["-stream_loop", "-1"]
     except Exception:
         pass
-    cmd += ["-i", str(path.resolve())]
+
+    has_audio = probe_audio(banner)
+    cmd = ["ffmpeg", "-y", "-v", "error",
+           "-loop", "1", "-framerate", str(cfg.FPS), "-t", f"{seconds:.3f}",
+           "-i", str(frame.resolve()), *loop, "-i", str(banner.resolve())]
     if not has_audio:
         cmd += ["-f", "lavfi", "-t", f"{seconds:.3f}",
                 "-i", "anullsrc=r=44100:cl=stereo"]
 
-    video = (f"[0:v]trim=0:{seconds:.3f},setpts=PTS-STARTPTS")
-    if background:
-        # Однотонный (обычно зелёный) фон → прозрачность → чёрная подложка.
-        video += (f",format=rgba,"
-                  f"scale={cfg.WIDTH}:{cfg.HEIGHT}:force_original_aspect_ratio=decrease,"
-                  f"colorkey={background}:0.30:0.10[bkey];"
-                  f"color=c=black:s={cfg.WIDTH}x{cfg.HEIGHT}:r={cfg.FPS}:d={seconds:.3f}[board];"
-                  f"[board][bkey]overlay=(W-w)/2:(H-h)/2:shortest=1,"
-                  f"format=yuv420p,fps={cfg.FPS},setsar=1[v]")
-    else:
-        video += (f",scale={cfg.WIDTH}:{cfg.HEIGHT}:force_original_aspect_ratio=decrease,"
-                  f"pad={cfg.WIDTH}:{cfg.HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,"
-                  f"format=yuv420p,fps={cfg.FPS},setsar=1[v]")
+    # Фон — стоп-кадр клипа на весь кадр, сильно размытый.
+    background = (f"[0:v]scale={cfg.WIDTH}:{cfg.HEIGHT}:"
+                  f"force_original_aspect_ratio=increase,"
+                  f"crop={cfg.WIDTH}:{cfg.HEIGHT},boxblur=24:2,"
+                  f"fps={cfg.FPS},setsar=1[bg]")
+    # Баннер вписываем целиком, прозрачность сохраняем — тогда виден и фон.
+    foreground = (f"[1:v]trim=0:{seconds:.3f},setpts=PTS-STARTPTS,format=rgba,"
+                  f"scale={cfg.WIDTH}:{cfg.HEIGHT}:"
+                  f"force_original_aspect_ratio=decrease:flags=lanczos[fg]")
+    mix = (f"[bg][fg]overlay=(W-w)/2:(H-h)/2:shortest=1,"
+           f"format=yuv420p,fps={cfg.FPS},setsar=1[v]")
 
-    source = "[0:a]" if has_audio else "[1:a]"
+    source = "[1:a]" if has_audio else "[2:a]"
     audio = (f"{source}atrim=0:{seconds:.3f},asetpts=PTS-STARTPTS,"
              f"aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
              f"apad,atrim=0:{seconds:.3f}[a]")
@@ -275,7 +255,8 @@ def _banner_ready(path: Path, seconds: float) -> Path:
     tmp = out.with_name(f"{out.stem}.{os.getpid()}.tmp.mp4")
     try:
         result = subprocess.run(
-            [*cmd, "-filter_complex", f"{video};{audio}",
+            [*cmd, "-filter_complex",
+             f"{background};{foreground};{mix};{audio}",
              "-map", "[v]", "-map", "[a]",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
              "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
@@ -283,29 +264,32 @@ def _banner_ready(path: Path, seconds: float) -> Path:
             capture_output=True, text=True, encoding="utf-8", errors="replace")
         if result.returncode != 0 or not tmp.exists() or tmp.stat().st_size == 0:
             detail = (result.stderr or "").strip()[-500:] or "ffmpeg ничего не написал"
-            raise RuntimeError(f"реклама {path.name}: {detail}")
+            raise RuntimeError(f"реклама {banner.name}: {detail}")
         os.replace(tmp, out)
     finally:
         tmp.unlink(missing_ok=True)
+        frame.unlink(missing_ok=True)
 
     _ready_cache[key] = out
     return out
 
 
 def caption_y(video_size: tuple[int, int] | None = None) -> int:
-    """Где ставить субтитры: в полном кадре — 82 % высоты, при полях — по видео."""
+    """Где ставить субтитры: на стыке видео и нижней части кадра."""
     mode = getattr(cfg, "BACKGROUND_MODE", "folder")
     if mode == "crop" or (video_size and min(video_size) <= 0):
         return int(cfg.HEIGHT * 0.82)
+    if mode in ("folder", "blur", "black"):
+        # Ровно стык: верхняя половина — видео, нижняя — фон.
+        return int(round(cfg.HEIGHT * cfg.TOP_RATIO))
     if mode == "width" and video_size:
         width, height = video_size
         video_h = round(cfg.WIDTH * height / width)
         video_h = min(cfg.HEIGHT, max(1, video_h))
         top = (cfg.HEIGHT - video_h) // 2
-        # 85 % высоты самого видео, но не ниже 92 % кадра.
-        return min(int(cfg.HEIGHT * 0.92), top + int(video_h * 0.85))
-    if mode in ("folder", "blur", "black"):
-        return int(cfg.HEIGHT * (cfg.TOP_RATIO + (1 - cfg.TOP_RATIO) * 0.35))
+        # Нижняя кромка видео — там же, где начинаются поля, но не у самого
+        # края кадра (иначе вертикальное видео обрежет субтитры).
+        return min(top + video_h, int(cfg.HEIGHT * 0.92))
     return int(cfg.HEIGHT * 0.82)
 
 
@@ -371,12 +355,13 @@ def render_clip(job: dict) -> str:
                                           "-t", f"{total:.3f}"))
                    if music_path else None)
 
-    # Рекламные вставки готовим заранее отдельным проходом: вырезание фона
+    # Рекламные вставки готовим заранее отдельным проходом: сборка сцены
     # внутри общего фильтра на длинном клипе съедает память и роняет ffmpeg.
     banner_specs = []
     for item in pick_banners(total):
         try:
-            ready = _banner_ready(Path(item["path"]), item["duration"])
+            ready = banner_scene(Path(item["path"]), item["duration"],
+                                 clip, start + item["at"])
         except Exception as e:
             log.warning("Реклама %s не подготовлена, пропускаю: %s", item["path"], e)
             continue

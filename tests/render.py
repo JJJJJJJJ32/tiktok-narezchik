@@ -44,7 +44,7 @@ def make_media() -> dict:
            "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-shortest", str(clip))
 
-    # Реклама на однотонном зелёном фоне — проверяем вырезание фона.
+    # Реклама без прозрачности: кладём её поверх размытого кадра клипа.
     banner = WORK / "banners" / "banner.mp4"
     ffmpeg("-f", "lavfi", "-i", f"color=c=0x00b140:s=320x240:r=30:d={BANNER_SECONDS}",
            "-f", "lavfi", "-i", f"sine=frequency=880:duration={BANNER_SECONDS}",
@@ -84,13 +84,18 @@ def check_frame_black_bars(png: Path) -> None:
     assert middle > 24, f"по центру пусто: {middle}"
 
 
-def check_frame_banner_clean(png: Path) -> None:
-    """На кадре рекламы зелёного фона быть не должно — только чёрный."""
-    red, green, blue = mean_rgb(png, "200:200:0:200")
-    assert max(red, green, blue) < 30, f"фон рекламы не вырезан: {(red, green, blue)}"
-    # Сам ролик при этом виден: белая плашка в центре.
-    red, green, blue = mean_rgb(png, "200:100:440:800")
+def check_frame_banner_scene(png: Path) -> None:
+    """Кадр рекламы: размытый стоп-кадр клипа и сам ролик поверх него."""
+    top = mean_rgb(png, "200:100:0:0")
+    bottom = mean_rgb(png, "200:100:0:" + str(cfg.HEIGHT - 100))
+    assert max(top) > 40, f"сверху не размытый клип, а чёрное: {top}"
+    assert max(bottom) > 40, f"снизу не размытый клип, а чёрное: {bottom}"
+    # Сам ролик виден: белая плашка в центре.
+    red, green, blue = mean_rgb(png, "200:100:440:910")
     assert min(red, green, blue) > 100, f"ролик пропал: {(red, green, blue)}"
+    # Баннер вписан целиком по ширине кадра.
+    red, green, blue = mean_rgb(png, "40:20:0:560")
+    assert green > red and green > blue, f"ролик не на месте: {(red, green, blue)}"
 
 
 def main() -> None:
@@ -100,7 +105,6 @@ def main() -> None:
     cfg.BANNER_ENABLED = True
     cfg.BANNER_DIR = str(media["banner"].parent)
     cfg.BANNER_DURATION = int(BANNER_SECONDS)
-    cfg.BANNER_GREEN = True
     cfg.MUSIC_ENABLED = True
     cfg.MUSIC_DIR = str(media["music"].parent)
     cfg.MUSIC_VOLUME = 0.15
@@ -141,7 +145,7 @@ def main() -> None:
                         "-i", str(out), "-frames:v", "1", str(target)],
                        check=True, capture_output=True)
     check_frame_black_bars(frame_clip)
-    check_frame_banner_clean(frame_banner)
+    check_frame_banner_scene(frame_banner)
 
     print(f"кадр {width}x{height}, длительность {duration:.1f} с "
           f"(клип {CLIP_SECONDS:.0f} + реклама {BANNER_SECONDS:.0f})")

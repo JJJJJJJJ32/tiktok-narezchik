@@ -49,10 +49,10 @@ def check_caption_width_mode():
     old = cfg.BACKGROUND_MODE
     cfg.BACKGROUND_MODE = "width"
     try:
-        # 16:9 на всю ширину: 1920x1080 → высота видео 608, сверху поле 656.
+        # 16:9 на всю ширину: 1920x1080 → высота видео 608, низ видео на 1264.
         y = composer.caption_y((1920, 1080))
-        assert 656 < y < 656 + 608, y
-        # Вертикальное видео на всю ширину занимает почти весь кадр.
+        assert y == (HEIGHT - 608) // 2 + 608, y
+        # Вертикальное видео занимает весь кадр — субтитры не уезжают за край.
         y = composer.caption_y((1080, 1920))
         assert 1500 < y < HEIGHT, y
         # Субтитры всегда внутри кадра.
@@ -69,14 +69,14 @@ def check_caption_other_modes():
         cfg.BACKGROUND_MODE = "crop"
         assert composer.caption_y((1920, 1080)) == int(HEIGHT * 0.82)
 
+        # Субтитры ровно на стыке верхнего видео и нижней части.
         cfg.BACKGROUND_MODE = "folder"
         cfg.TOP_RATIO = 0.5
-        y = composer.caption_y()
-        assert int(HEIGHT * 0.5) < y < HEIGHT, y      # ниже стыка половин
+        assert composer.caption_y() == HEIGHT // 2
 
         cfg.BACKGROUND_MODE = "blur"
         cfg.TOP_RATIO = 0.6
-        assert composer.caption_y() == int(HEIGHT * (0.6 + 0.4 * 0.35))
+        assert composer.caption_y() == int(round(HEIGHT * 0.6))
     finally:
         cfg.BACKGROUND_MODE, cfg.TOP_RATIO = old_mode, old_ratio
 

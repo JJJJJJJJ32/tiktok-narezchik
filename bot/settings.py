@@ -75,7 +75,6 @@ def defaults() -> dict:
         "banner_enabled": cfg.BANNER_ENABLED,
         "banner_dir": cfg.BANNER_DIR,
         "banner_duration": cfg.BANNER_DURATION,
-        "banner_green": cfg.BANNER_GREEN,
     }
 
 
@@ -132,7 +131,6 @@ def apply(data: dict, bot: dict | None = None) -> None:
     cfg.BANNER_DIR = str(data.get("banner_dir", cfg.BANNER_DIR))
     cfg.BANNER_DURATION = max(0, int(data.get("banner_duration",
                                               cfg.BANNER_DURATION)))
-    cfg.BANNER_GREEN = bool(data.get("banner_green", cfg.BANNER_GREEN))
 
     if bot is not None:
         apply_bot(bot, data)

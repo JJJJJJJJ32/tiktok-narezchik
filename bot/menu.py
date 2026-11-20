@@ -743,13 +743,15 @@ def _banners() -> None:
         ui.note("Баннер — в середине каждой минуты: 1:00 → 0:30, "
                 "2:00 → 0:30 и 1:30. Последняя неполная минута — тоже "
                 "посередине: 0:45 → 0:22.")
+        ui.note("Ролик идёт целиком (до 15 с) поверх размытого стоп-кадра "
+                "клипа; прозрачный фон сохраняется.")
         ui.blank()
         ui.choice(1, "ВКЛЮЧИТЬ / ВЫКЛЮЧИТЬ",
                   "выключить" if data["banner_enabled"] else "включить")
         ui.choice(2, "ПАПКА С РЕКЛАМОЙ", data["banner_dir"])
-        ui.choice(3, "ДЛИТЕЛЬНОСТЬ ВСТАВКИ", f"{data['banner_duration']} с")
-        ui.choice(4, "УБИРАТЬ ОДНОТОННЫЙ ФОН",
-                  "да" if data["banner_green"] else "нет")
+        label = ("целиком" if not data["banner_duration"]
+                 else f"{data['banner_duration']} с")
+        ui.choice(3, "ДЛИТЕЛЬНОСТЬ ВСТАВКИ", label)
         ui.choice(0, "НАЗАД")
 
         answer = _ask()
@@ -768,21 +770,15 @@ def _banners() -> None:
                 ui.ok(f"Папка: {folder} ({len(composer.list_banners())} роликов)")
             time.sleep(0.8)
         elif answer == "3":
-            value = _ask("Сколько секунд показывать рекламу",
+            value = _ask("Сколько секунд показывать рекламу (0 — целиком)",
                          str(data["banner_duration"]))
-            if value.isdigit() and 1 <= int(value) <= 60:
+            if value.isdigit() and 0 <= int(value) <= 60:
                 data["banner_duration"] = int(value)
                 _save(data)
-                ui.ok(f"Длительность: {value} с")
+                ui.ok("Длительность: " + ("целиком" if not int(value) else f"{value} с"))
             else:
-                ui.warn("Нужно число от 1 до 60")
+                ui.warn("Нужно число от 0 до 60")
             time.sleep(0.8)
-        elif answer == "4":
-            data["banner_green"] = not data["banner_green"]
-            _save(data)
-            ui.ok("Фон рекламы: "
-                  + ("вырезаем" if data["banner_green"] else "оставляем как есть"))
-            time.sleep(0.9)
         elif answer in ("0", ""):
             return
 
