@@ -169,6 +169,35 @@ def check_ytdlp_sleep_kwarg():
     assert downloader._retry_sleep(n=99) == 30.0
 
 
+def check_google_auth_error():
+    """Отозванный токен — одно понятное исключение, без повторов.
+
+    В логе было: RefreshError invalid_grant на загрузке, и видео падало
+    с трейсбеком целиком. Теперь это GoogleAuthError с подсказкой.
+    """
+    from google.auth.exceptions import RefreshError
+
+    calls = {"n": 0}
+
+    def revoked():
+        calls["n"] += 1
+        raise RefreshError("invalid_grant: Token has been expired or revoked.")
+
+    try:
+        uploader._call(revoked, "Диск: папка")
+    except uploader.GoogleAuthError as e:
+        assert "войти" in str(e), e
+    else:
+        raise AssertionError("ожидался GoogleAuthError")
+    assert calls["n"] == 1, calls     # повторов нет
+
+    # Строка invalid_grant без типа RefreshError тоже распознаётся.
+    assert uploader._auth_failed(RuntimeError(
+        "invalid_grant: Token has been expired or revoked."))
+    assert not uploader._auth_failed(RuntimeError("503 backend error"))
+    assert uploader.RELOGIN_HINT
+
+
 class Req:
     def __init__(self, fn):
         self.fn = fn
@@ -254,6 +283,7 @@ def main():
     check_folder_not_duplicated()
     check_file_not_duplicated()
     check_ytdlp_sleep_kwarg()
+    check_google_auth_error()
     print("ВСЁ ОК")
 
 

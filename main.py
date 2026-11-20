@@ -768,6 +768,16 @@ def _run_profile(profile: dict, con, dry_run: bool, stats: dict,
 
     try:
         drive = uploader.DriveUploader(dry_run=dry_run)
+        # Токен мог истечь уже после прошлого запуска — проверяем до скачивания,
+        # иначе бот потратит час на монтаж и упадёт на загрузке.
+        drive.check()
+    except uploader.GoogleAuthError as e:
+        ui.fail(f"Google не пускает «{profile['name'] or 'без имени'}»: {e}")
+        ui.note(f"Войдите заново: {uploader.RELOGIN_HINT}")
+        ui.note("В режиме Testing Google refresh-токен живёт 7 дней — переведите "
+                "приложение в Production (README, раздел «Google Drive»).")
+        errors.append(f"{profile['name'] or 'Google'}: {e}")
+        return False
     except Exception as e:
         text = _short(e)
         ui.fail(f"Google Диск недоступен: {text}")
@@ -786,6 +796,8 @@ def _run_profile(profile: dict, con, dry_run: bool, stats: dict,
             ui.info(f"Почта: {mailer.recipient()}")
         except Exception as e:
             ui.fail(f"Почта недоступна: {_short(e)}")
+            if isinstance(e, uploader.GoogleAuthError):
+                ui.note(f"Войдите заново: {uploader.RELOGIN_HINT}")
             ui.note("Клипы загрузятся на Диск, но письма не будет — файлы оставлю "
                     "на компьютере.")
             mailer = None
@@ -904,6 +916,13 @@ def _run_profile(profile: dict, con, dry_run: bool, stats: dict,
 
                 try:
                     result = process_video(video, con, drive, mailer, dry_run)
+                except uploader.GoogleAuthError as e:
+                    ui.fail(f"Google: {_short(e)}")
+                    ui.note(f"Войдите заново: {uploader.RELOGIN_HINT}")
+                    errors.append(f"{title}: {_short(e)}")
+                    ui.note(f"Остальные видео «{profile['name'] or 'бота'}» пропускаю — "
+                            "сначала войдите в Google.")
+                    return False
                 except Exception as e:
                     log.exception("Ошибка на видео %s", entry.get("id"))
                     ui.fail(f"ошибка обработки: {_short(e)}")

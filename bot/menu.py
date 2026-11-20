@@ -314,11 +314,14 @@ def _google_login(index: int) -> None:
     ui.info("Сейчас откроется браузер. Войдите тем аккаунтом, на чей Диск "
             "и почту должен работать этот бот.")
     try:
-        drive = uploader.DriveUploader()
+        drive = uploader.DriveUploader(force_login=True)
         mailer = uploader.Mailer(drive_service=drive.service)
         address = mailer.account()
     except Exception as e:
         ui.fail(f"Не получилось: {e}")
+        if isinstance(e, uploader.GoogleAuthError) or "invalid_grant" in str(e).lower():
+            ui.note("Если браузер не открылся, проверьте интернет и файл "
+                    f"{cfg.GOOGLE_CREDENTIALS}, затем повторите вход.")
     else:
         ui.ok(f"Готово. Аккаунт: {address}")
         ui.note(f"Клипы пойдут в папку «{bot['drive_root']}», "
@@ -338,6 +341,10 @@ def _google_check(index: int) -> None:
         address = uploader.Mailer(drive_service=drive.service).account()
     except Exception as e:
         ui.fail(f"Не работает: {e}")
+        if isinstance(e, uploader.GoogleAuthError):
+            ui.note(f"Войдите заново: {uploader.RELOGIN_HINT}")
+            ui.note("В режиме Testing Google refresh-токен живёт 7 дней — "
+                    "для постоянной работы переведите приложение в Production.")
     else:
         ui.ok(f"Диск доступен, папка: {folder}")
         ui.ok(f"Аккаунт: {address}")

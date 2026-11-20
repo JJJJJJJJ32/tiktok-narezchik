@@ -31,6 +31,18 @@ REPORT_HEADER = ["дата", "канал", "автор", "название", "с
 _BAD_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
 
+# Куда идти, если Google больше не пускает.
+RELOGIN_HINT = "Меню → БОТЫ → этот бот → GOOGLE: ПОЧТА И ДИСК → ВОЙТИ В GOOGLE"
+
+_AUTH_MARKERS = (
+    "invalid_grant", "token has been expired or revoked", "invalid_client",
+    "unauthorized_client", "token expired",
+)
+
+
+class GoogleAuthError(RuntimeError):
+    """Вход в Google просрочен или отозван: нужен повторный вход, повторы не помогут."""
+
 
 def _brief(error: Exception, limit: int = 120) -> str:
     text = " ".join(str(error).split())
@@ -67,6 +79,21 @@ def _transient(error: Exception) -> bool:
     ))
 
 
+def _auth_failed(error: Exception) -> bool:
+    """Токен просрочен/отозван, а не временный сбой сети."""
+    if error.__class__.__name__ in ("RefreshError", "ReauthError"):
+        return True
+    text = str(error).lower()
+    return "invalid_grant" in text or any(key in text for key in _AUTH_MARKERS)
+
+
+def _fail_auth(error: Exception) -> GoogleAuthError:
+    """Одно понятное исключение вместо многократных повторов и простыни трейсбека."""
+    log.warning("Вход в Google не работает: %s", _brief(error, 200))
+    return GoogleAuthError(
+        "вход в Google просрочен или отозван — нужно войти заново")
+
+
 def _call(action, what: str, tries: int = 4):
     """Повторяет сетевую операцию Google с нарастающей паузой."""
     last_error: Exception | None = None
@@ -74,6 +101,9 @@ def _call(action, what: str, tries: int = 4):
         try:
             return action()
         except Exception as e:
+            if _auth_failed(e):
+                # 401 invalid_grant: сколько ни повторяй — не поможет.
+                raise _fail_auth(e) from e
             last_error = e
             if attempt >= tries or not _transient(e):
                 raise
@@ -91,8 +121,15 @@ def _token_scopes(token: Path) -> list[str]:
         return []
 
 
-def _service(api: str, version: str, required: list[str]):
-    """Собирает клиент Google. Если в token.json не хватает прав — один раз просит вход."""
+def _service(api: str, version: str, required: list[str],
+             force_login: bool = False):
+    """Собирает клиент Google. Если в token.json не хватает прав — один раз просит вход.
+
+    force_login=True — всегда открыть браузер и войти заново (пункт меню
+    «Войти в Google»). В обычном запуске браузер не открываем: просроченный
+    или отозванный токен превращаем в GoogleAuthError с подсказкой, чтобы
+    один бот не утаскивал за собой остальных.
+    """
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
@@ -100,27 +137,39 @@ def _service(api: str, version: str, required: list[str]):
 
     token = Path(cfg.GOOGLE_TOKEN)
     creds = None
-    if token.exists() and set(required).issubset(set(_token_scopes(token))):
+    if (not force_login and token.exists()
+            and set(required).issubset(set(_token_scopes(token)))):
         creds = Credentials.from_authorized_user_file(str(token))
 
-    if creds is None:
+    def login():
         if not Path(cfg.GOOGLE_CREDENTIALS).exists():
             raise FileNotFoundError(
                 f"Нет {cfg.GOOGLE_CREDENTIALS}. Смотри README, раздел «Google Drive»."
             )
         flow = InstalledAppFlow.from_client_secrets_file(cfg.GOOGLE_CREDENTIALS, SCOPES)
-        creds = flow.run_local_server(port=0)
-        token.write_text(creds.to_json(), encoding="utf-8")
+        value = flow.run_local_server(port=0)
+        token.write_text(value.to_json(), encoding="utf-8")
+        return value
+
+    if creds is None:
+        if token.exists() and not force_login:
+            raise GoogleAuthError(
+                "в токене нет нужных прав — нужно войти в Google заново")
+        creds = login()
     elif not creds.valid:
-        if creds.expired and creds.refresh_token:
+        if not (creds.expired and creds.refresh_token):
+            raise GoogleAuthError(
+                "вход в Google просрочен или отозван — нужно войти заново")
+        try:
             creds.refresh(Request())
             token.write_text(creds.to_json(), encoding="utf-8")
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(cfg.GOOGLE_CREDENTIALS, SCOPES)
-            creds = flow.run_local_server(port=0)
-            token.write_text(creds.to_json(), encoding="utf-8")
+        except Exception as e:
+            if not _auth_failed(e):
+                raise
+            raise _fail_auth(e) from e
 
-    return build(api, version, credentials=creds, cache_discovery=False)
+    service = build(api, version, credentials=creds, cache_discovery=False)
+    return service
 
 
 def _escape(text: str) -> str:
@@ -163,16 +212,26 @@ def _clock(seconds: float) -> str:
 class DriveUploader:
     """dry_run=True — ничего не грузим, report.csv пишем локально."""
 
-    def __init__(self, dry_run: bool = False, service=None):
+    def __init__(self, dry_run: bool = False, service=None,
+                 force_login: bool = False):
         self.dry_run = dry_run
         self.service = service if service is not None else (
-            None if dry_run else _service("drive", "v3", DRIVE_SCOPES))
+            None if dry_run else _service("drive", "v3", DRIVE_SCOPES,
+                                          force_login=force_login))
         self._folders: dict[tuple[str, str | None], str] = {}
         self._report_id: str | None = None
         self._local_report = Path(cfg.OUTPUT_DIR) / REPORT_NAME
         self._local_report.parent.mkdir(parents=True, exist_ok=True)
         if not self._local_report.exists():
             self._write_local_report([REPORT_HEADER])
+
+    def check(self) -> None:
+        """Пробный запрос к Диску: ловит отозванный токен до скачивания видео."""
+        if self.dry_run or self.service is None:
+            return
+        _call(lambda: self.service.files().list(
+            q="trashed = false", fields="files(id)", pageSize=1,
+        ).execute(), "Диск: проверка входа", tries=1)
 
     # ---------- локальная копия отчёта ----------
     def _write_local_report(self, rows: list[list[str]]) -> None:
@@ -559,13 +618,18 @@ class Mailer:
             except Exception as e:  # сеть, лимиты, не включён Gmail API
                 last_error = e
                 log.debug("Письмо, попытка %d: %s", attempt, e)
+                if _auth_failed(e):
+                    break     # отозванный токен повторами не лечится
                 if attempt < 4 and _transient(e):
                     time.sleep(min(20, 3 * attempt))
         raise RuntimeError(_gmail_hint(last_error))
 
 
 def _gmail_hint(error: Exception | None) -> str:
-    text = str(error)
+    text = str(error or "")
+    if error is not None and _auth_failed(error):
+        return ("Вход в Google просрочен или отозван — письмо не отправить. "
+                f"Войдите заново: {RELOGIN_HINT}")
     if "has not been used in project" in text or "accessNotConfigured" in text:
         return ("Gmail API выключен в Google Cloud. Откройте console.cloud.google.com, "
                 "выберите свой проект → APIs & Services → Library → Gmail API → Enable.")
